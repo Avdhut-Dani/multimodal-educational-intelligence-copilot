@@ -41,6 +41,21 @@ def create_app() -> FastAPI:
     # Include routes
     app.include_router(router)
 
+    @app.get("/", include_in_schema=False)
+    async def root():
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/dashboard")
+
+    @app.get("/dashboard", tags=["Dashboard"], summary="Interactive Visual Ingestion Dashboard")
+    async def get_dashboard():
+        from fastapi.responses import HTMLResponse
+        template_path = os.path.join(os.path.dirname(__file__), "templates", "dashboard.html")
+        if os.path.exists(template_path):
+            with open(template_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return HTMLResponse(content=content)
+        return HTMLResponse("<h1>Dashboard template not found</h1>", status_code=404)
+
     @app.get("/health", tags=["Health"])
     async def health_check():
         return {

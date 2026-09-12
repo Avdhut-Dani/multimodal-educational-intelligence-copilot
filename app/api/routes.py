@@ -129,3 +129,79 @@ async def list_jobs(
         page_size=page_size,
         jobs=jobs,
     )
+
+
+@router.get(
+    "/api/catalog/points",
+    summary="Inspect vectorized points and metadata stored in Qdrant",
+)
+async def get_catalog_points(
+    job_id: Optional[str] = Query(default=None, description="Optional job ID filter"),
+    limit: int = Query(default=50, ge=1, le=200, description="Max points to return"),
+):
+    from qdrant_client import QdrantClient
+    from qdrant_client.http import models as qmodels
+
+    try:
+        if settings.QDRANT_MODE == "embedded":
+            client = QdrantClient(path=settings.QDRANT_PATH)
+        else:
+            client = QdrantClient(url=settings.QDRANT_URL)
+
+        q_filter = None
+        if job_id:
+            q_filter = qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="metadata.job_id",
+                        match=qmodels.MatchValue(value=job_id),
+                    )
+                ]
+            )
+
+        scroll_res = client.scroll(
+            collection_name=settings.QDRANT_COLLECTION,
+            scroll_filter=q_filter,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        col_info = client.get_collection(settings.QDRANT_COLLECTION)
+
+        points_data = []
+        for pt in scroll_res[0]:
+            points_data.append({
+                "id": str(pt.id),
+                "text": pt.payload.get("text", "") if pt.payload else "",
+                "metadata": pt.payload.get("metadata", {}) if pt.payload else {},
+            })
+
+        return {
+            "collection": settings.QDRANT_COLLECTION,
+            "total_points": col_info.points_count,
+            "vector_dim": col_info.config.params.vectors.size,
+            "returned_count": len(points_data),
+            "points": points_data,
+        }
+    except Exception as e:
+        return {
+            "collection": settings.QDRANT_COLLECTION,
+            "total_points": 0,
+            "vector_dim": settings.EMBEDDING_DIM,
+            "returned_count": 0,
+            "points": [],
+            "error": str(e),
+        }
+
+
+@router.get(
+    "/frames/{filename}",
+    summary="Serve video keyframe snapshot images",
+)
+async def get_frame_image(filename: str):
+    from fastapi.responses import FileResponse
+    safe_name = os.path.basename(filename)
+    frame_path = os.path.join(settings.FRAME_DIR, safe_name)
+    if not os.path.exists(frame_path):
+        raise HTTPException(status_code=404, detail="Keyframe image not found")
+    return FileResponse(frame_path, media_type="image/jpeg")

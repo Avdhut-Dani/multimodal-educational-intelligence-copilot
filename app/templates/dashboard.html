@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team 4a: Multi-Modal Ingestion & Knowledge Catalog Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+
+  <!-- Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-50 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+          <i class="fa-solid fa-cube text-white text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="font-bold text-lg text-white">Multi-Modal Ingestion Pipeline</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">Team 4a</span>
+          </div>
+          <p class="text-xs text-slate-400">Education Copilot Knowledge Factory &bull; Output for Team 4b</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <a href="/docs" target="_blank" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center space-x-1.5 border border-slate-700">
+          <i class="fa-solid fa-code"></i>
+          <span>Swagger API</span>
+        </a>
+        <button onclick="refreshData()" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center space-x-1.5 font-medium shadow-sm">
+          <i class="fa-solid fa-rotate"></i>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- KPI Metric Cards -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Stored Knowledge Vectors</span>
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+            <i class="fa-solid fa-database"></i>
+          </div>
+        </div>
+        <div class="mt-3 flex items-baseline space-x-2">
+          <span id="kpi-total-points" class="text-3xl font-extrabold text-white">--</span>
+          <span class="text-xs text-slate-400">points</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Collection: <code class="text-emerald-400">education_materials</code></p>
+      </div>
+
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Processed Jobs</span>
+          <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+            <i class="fa-solid fa-list-check"></i>
+          </div>
+        </div>
+        <div class="mt-3 flex items-baseline space-x-2">
+          <span id="kpi-total-jobs" class="text-3xl font-extrabold text-white">--</span>
+          <span class="text-xs text-slate-400">runs</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">PDFs, Videos, YouTube URLs</p>
+      </div>
+
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Embedding Model</span>
+          <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+            <i class="fa-solid fa-brain"></i>
+          </div>
+        </div>
+        <div class="mt-3 flex items-baseline space-x-2">
+          <span class="text-2xl font-bold text-white">384-d</span>
+          <span class="text-xs text-purple-400 font-mono">all-MiniLM-L6-v2</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Normalized Euclidean (L2 = 1.0)</p>
+      </div>
+
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Novelty Features</span>
+          <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+          </div>
+        </div>
+        <div class="mt-2 space-y-1">
+          <div class="text-xs text-slate-300 flex items-center space-x-1.5">
+            <i class="fa-solid fa-check text-emerald-400 text-[10px]"></i>
+            <span>Slide Keyframe OCR</span>
+          </div>
+          <div class="text-xs text-slate-300 flex items-center space-x-1.5">
+            <i class="fa-solid fa-check text-emerald-400 text-[10px]"></i>
+            <span>Table-to-Markdown</span>
+          </div>
+          <div class="text-xs text-slate-300 flex items-center space-x-1.5">
+            <i class="fa-solid fa-check text-emerald-400 text-[10px]"></i>
+            <span>Dynamic Scene Detection</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Ingestion Box -->
+    <section class="glass-card rounded-2xl p-6">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
+        <div>
+          <h2 class="text-base font-semibold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-file-import text-emerald-400"></i>
+            <span>Ingest New Educational Material</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Dispatches to the asynchronous 4-stage pipeline (Extract &rarr; Chunk &rarr; Embed &rarr; Publish)</p>
+        </div>
+        <!-- Tabs -->
+        <div class="flex bg-slate-900 rounded-xl p-1 border border-slate-800" id="ingest-tabs">
+          <button onclick="switchTab('pdf')" id="tab-pdf" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white transition">PDF Document</button>
+          <button onclick="switchTab('video')" id="tab-video" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition">MP4 Video</button>
+          <button onclick="switchTab('youtube')" id="tab-youtube" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition">YouTube URL</button>
+        </div>
+      </div>
+
+      <!-- PDF Form -->
+      <form id="form-pdf" onsubmit="handleUploadPDF(event)" class="space-y-4">
+        <div class="border-2 border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl p-6 text-center transition bg-slate-900/30">
+          <i class="fa-solid fa-file-pdf text-3xl text-rose-400 mb-2"></i>
+          <p class="text-xs text-slate-300 font-medium">Select a PDF textbook chapter, syllabus, or lecture paper</p>
+          <p class="text-[11px] text-slate-500 mt-1">Automatic heading hierarchy extraction & Table-to-Markdown formatting</p>
+          <input type="file" id="pdf-file-input" accept="application/pdf" required class="mt-3 text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500 cursor-pointer">
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" id="btn-submit-pdf" class="px-5 py-2 text-xs font-medium rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center space-x-2 shadow-lg shadow-emerald-600/20">
+            <i class="fa-solid fa-play"></i>
+            <span>Start PDF Ingestion Pipeline</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Video Form -->
+      <form id="form-video" onsubmit="handleUploadVideo(event)" class="space-y-4 hidden">
+        <div class="border-2 border-dashed border-slate-700 hover:border-indigo-500/50 rounded-xl p-6 text-center transition bg-slate-900/30">
+          <i class="fa-solid fa-video text-3xl text-indigo-400 mb-2"></i>
+          <p class="text-xs text-slate-300 font-medium">Select an MP4 recorded lecture or video tutorial</p>
+          <p class="text-[11px] text-slate-500 mt-1">Speech-to-text via Whisper, Scene-change keyframe extraction, & Slide OCR</p>
+          <input type="file" id="video-file-input" accept="video/mp4" required class="mt-3 text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" id="btn-submit-video" class="px-5 py-2 text-xs font-medium rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center space-x-2 shadow-lg shadow-indigo-600/20">
+            <i class="fa-solid fa-play"></i>
+            <span>Start Video Ingestion Pipeline</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- YouTube Form -->
+      <form id="form-youtube" onsubmit="handleUploadYouTube(event)" class="space-y-4 hidden">
+        <div class="border-2 border-dashed border-slate-700 hover:border-red-500/50 rounded-xl p-6 text-center transition bg-slate-900/30">
+          <i class="fa-brands fa-youtube text-3xl text-red-500 mb-2"></i>
+          <p class="text-xs text-slate-300 font-medium">Enter a public YouTube lecture URL</p>
+          <p class="text-[11px] text-slate-500 mt-1">Extracts timestamped captions, title, channel name, and duration metadata</p>
+          <div class="max-w-lg mx-auto mt-3 flex items-center space-x-2">
+            <input type="url" id="youtube-url-input" placeholder="https://www.youtube.com/watch?v=..." required class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500">
+            <input type="text" id="youtube-lang-input" value="en" placeholder="en" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white text-center focus:outline-none focus:border-red-500">
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="submit" id="btn-submit-youtube" class="px-5 py-2 text-xs font-medium rounded-xl bg-red-600 hover:bg-red-500 text-white transition flex items-center space-x-2 shadow-lg shadow-red-600/20">
+            <i class="fa-solid fa-play"></i>
+            <span>Fetch Transcript & Ingest</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Real-time Progress Bar -->
+      <div id="live-progress-box" class="mt-4 hidden p-4 rounded-xl bg-slate-900 border border-slate-800">
+        <div class="flex items-center justify-between text-xs mb-2">
+          <span id="live-progress-stage" class="font-medium text-emerald-400">Processing Pipeline...</span>
+          <span id="live-progress-pct" class="font-mono text-slate-300">0%</span>
+        </div>
+        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+          <div id="live-progress-bar" class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <p id="live-progress-desc" class="text-[11px] text-slate-400 mt-2">Stage 1 of 4: Extracting raw content...</p>
+      </div>
+    </section>
+
+    <!-- Ingestion Factory Ledger / Job Registry -->
+    <section class="glass-card rounded-2xl p-6">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+        <div>
+          <h2 class="text-base font-semibold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-network-wired text-indigo-400"></i>
+            <span>Ingestion Factory Ledger (Processed Materials)</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">All ingested media jobs tracked through the Celery/Redis lifecycle</p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto custom-scroll">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
+              <th class="py-3 px-4">Modality</th>
+              <th class="py-3 px-4">Source Material / File</th>
+              <th class="py-3 px-4">Pipeline Status</th>
+              <th class="py-3 px-4">Vector Chunks</th>
+              <th class="py-3 px-4">Timestamp</th>
+              <th class="py-3 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-table-body" class="divide-y divide-slate-800/60">
+            <tr>
+              <td colspan="6" class="py-6 text-center text-slate-500">Loading ingested files...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Multimodal Chunk & Keyframe Inspector -->
+    <section class="glass-card rounded-2xl p-6" id="inspector-section">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
+        <div>
+          <h2 class="text-base font-semibold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-magnifying-glass-chart text-amber-400"></i>
+            <span>Multimodal Chunk & Provenance Inspector</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Inspect the exact chunks, extracted slide OCR, and structured tables published to Qdrant for Team 4b</p>
+        </div>
+        <span id="inspector-active-file" class="text-xs px-3 py-1 rounded-lg bg-slate-800 text-slate-300 font-mono">Showing: All Stored Points</span>
+      </div>
+
+      <!-- Chunks Grid -->
+      <div id="chunks-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Chunks populated dynamically via JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
+    Multi-Modal Educational Intelligence Copilot &bull; Team 4a Ingestion Subsystem &bull; Output for Team 4b Qdrant Vector Store
+  </footer>
+
+  <script>
+    let activeTab = 'pdf';
+    let currentPollingInterval = null;
+
+    function switchTab(tab) {
+      activeTab = tab;
+      ['pdf', 'video', 'youtube'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        const form = document.getElementById(`form-${t}`);
+        if (t === tab) {
+          btn.className = 'px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white transition';
+          form.classList.remove('hidden');
+        } else {
+          btn.className = 'px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition';
+          form.classList.add('hidden');
+        }
+      });
+    }
+
+    async function refreshData() {
+      await loadCatalogStats();
+      await loadJobs();
+      await loadPoints();
+    }
+
+    async function loadCatalogStats() {
+      try {
+        const res = await fetch('/api/catalog/points?limit=1');
+        const data = await res.json();
+        document.getElementById('kpi-total-points').innerText = data.total_points || '0';
+      } catch (e) {
+        console.error("Error loading stats:", e);
+      }
+    }
+
+    async function loadJobs() {
+      try {
+        const res = await fetch('/jobs?page=1&page_size=20');
+        const data = await res.json();
+        document.getElementById('kpi-total-jobs').innerText = data.total || '0';
+        
+        const tbody = document.getElementById('jobs-table-body');
+        if (!data.jobs || data.jobs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-slate-500">No documents ingested yet. Upload a PDF or submit a video above!</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.jobs.map(job => {
+          let badge = '';
+          if (job.source_type === 'pdf') {
+            badge = '<span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono">PDF</span>';
+          } else if (job.source_type === 'mp4') {
+            badge = '<span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">MP4</span>';
+          } else {
+            badge = '<span class="px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-mono">YouTube</span>';
+          }
+
+          const filename = job.metadata?.filename || job.metadata?.url || 'Educational Material';
+          const chunks = job.chunk_count !== null ? `<span class="font-semibold text-emerald-400">${job.chunk_count}</span> chunks` : '<span class="text-slate-500">--</span>';
+          const time = new Date(job.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+          let statusBadge = '';
+          if (job.status === 'completed') {
+            statusBadge = '<span class="text-emerald-400 flex items-center space-x-1.5"><i class="fa-solid fa-circle-check text-[10px]"></i><span>100% Completed</span></span>';
+          } else if (job.status === 'failed' || job.status === 'publish_failed') {
+            statusBadge = `<span class="text-rose-400 flex items-center space-x-1.5"><i class="fa-solid fa-triangle-exclamation text-[10px]"></i><span>Failed (${job.status})</span></span>`;
+          } else {
+            statusBadge = `<span class="text-amber-400 flex items-center space-x-1.5"><i class="fa-solid fa-spinner fa-spin text-[10px]"></i><span>${job.progress}% (${job.status})</span></span>`;
+          }
+
+          return `
+            <tr class="hover:bg-slate-900/50 transition">
+              <td class="py-3 px-4">${badge}</td>
+              <td class="py-3 px-4 font-medium text-slate-200 max-w-xs truncate" title="${filename}">${filename}</td>
+              <td class="py-3 px-4">${statusBadge}</td>
+              <td class="py-3 px-4">${chunks}</td>
+              <td class="py-3 px-4 text-slate-400 text-[11px] font-mono">${time}</td>
+              <td class="py-3 px-4 text-right">
+                <button onclick="inspectJobPoints('${job.job_id}', '${filename}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-[11px] border border-slate-700">
+                  <i class="fa-solid fa-eye mr-1 text-slate-400"></i> View Chunks
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error("Error loading jobs:", e);
+      }
+    }
+
+    async function loadPoints(jobId = null, title = "All Stored Points") {
+      try {
+        const url = jobId ? `/api/catalog/points?job_id=${jobId}&limit=50` : '/api/catalog/points?limit=50';
+        const res = await fetch(url);
+        const data = await res.json();
+
+        document.getElementById('inspector-active-file').innerText = `Showing: ${title} (${data.points?.length || 0} chunks)`;
+        const grid = document.getElementById('chunks-grid');
+
+        if (!data.points || data.points.length === 0) {
+          grid.innerHTML = '<div class="col-span-2 py-8 text-center text-slate-500">No vector points found for this selection.</div>';
+          return;
+        }
+
+        grid.innerHTML = data.points.map((pt, idx) => {
+          const meta = pt.metadata || {};
+          const source = meta.source_type || 'unknown';
+
+          let badges = '';
+          if (source === 'pdf') {
+            badges += `<span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">Page ${meta.page_number || 1}</span>`;
+            if (meta.has_tables) {
+              badges += `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-table mr-1"></i>Markdown Table</span>`;
+            }
+          } else if (source === 'mp4') {
+            badges += `<span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20"><i class="fa-solid fa-clock mr-1"></i>${meta.start_timestamp}s - ${meta.end_timestamp}s</span>`;
+          } else if (source === 'youtube') {
+            badges += `<span class="px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20"><i class="fa-solid fa-clock mr-1"></i>${meta.start_timestamp}s (${meta.duration}s)</span>`;
+          }
+
+          let headingsHtml = '';
+          if (meta.headings && meta.headings.length > 0) {
+            headingsHtml = `<div class="mb-2 text-[11px] text-emerald-300 font-semibold flex items-center space-x-1.5"><i class="fa-solid fa-heading"></i><span>${meta.headings.map(h => h.text).join(' &rarr; ')}</span></div>`;
+          }
+
+          let visualSlideHtml = '';
+          if (meta.visual_slide_text) {
+            visualSlideHtml = `
+              <div class="mt-3 p-2.5 rounded-lg bg-slate-900/90 border border-amber-500/20 text-[11px]">
+                <div class="font-semibold text-amber-400 flex items-center space-x-1 mb-1">
+                  <i class="fa-solid fa-image"></i>
+                  <span>Slide Keyframe OCR (Novelty 1):</span>
+                </div>
+                <p class="text-slate-300 font-mono">${meta.visual_slide_text}</p>
+              </div>
+            `;
+          }
+
+          let frameImgHtml = '';
+          if (meta.frame_reference) {
+            const frameFilename = meta.frame_reference.split(/[\\\\/]/).pop();
+            frameImgHtml = `
+              <div class="mt-2">
+                <img src="/frames/${frameFilename}" alt="Keyframe Slide" class="rounded-lg border border-slate-700 max-h-36 object-cover w-full" onerror="this.style.display='none'">
+              </div>
+            `;
+          }
+
+          return `
+            <div class="bg-slate-900/60 border border-slate-800 hover:border-slate-700 rounded-xl p-4 flex flex-col justify-between transition">
+              <div>
+                <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                  <div class="flex items-center space-x-1.5">
+                    <span class="text-xs font-bold text-slate-300">#${idx + 1}</span>
+                    ${badges}
+                  </div>
+                  <span class="text-[10px] text-slate-500 font-mono truncate max-w-[120px]" title="${pt.id}">${pt.id.slice(0, 8)}...</span>
+                </div>
+                ${headingsHtml}
+                <div class="text-xs text-slate-200 leading-relaxed font-sans whitespace-pre-line bg-slate-950/40 p-3 rounded-lg border border-slate-800/80 max-h-48 overflow-y-auto custom-scroll">
+                  ${escapeHtml(pt.text)}
+                </div>
+                ${frameImgHtml}
+                ${visualSlideHtml}
+              </div>
+              <div class="mt-3 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                <span>Vector: 384-d L2</span>
+                <span class="text-emerald-500">Ready for Team 4b</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error("Error loading points:", e);
+      }
+    }
+
+    function inspectJobPoints(jobId, filename) {
+      loadPoints(jobId, filename);
+      document.getElementById('inspector-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.innerText = text;
+      return div.innerHTML;
+    }
+
+    // --- Form Submissions with Progress Polling ---
+    async function handleUploadPDF(e) {
+      e.preventDefault();
+      const input = document.getElementById('pdf-file-input');
+      if (!input.files || input.files.length === 0) return;
+
+      const formData = new FormData();
+      formData.append('file', input.files[0]);
+
+      await submitJob('/ingest/pdf', formData, true);
+    }
+
+    async function handleUploadVideo(e) {
+      e.preventDefault();
+      const input = document.getElementById('video-file-input');
+      if (!input.files || input.files.length === 0) return;
+
+      const formData = new FormData();
+      formData.append('file', input.files[0]);
+
+      await submitJob('/ingest/video', formData, true);
+    }
+
+    async function handleUploadYouTube(e) {
+      e.preventDefault();
+      const url = document.getElementById('youtube-url-input').value;
+      const language = document.getElementById('youtube-lang-input').value || 'en';
+
+      await submitJob('/ingest/youtube', JSON.stringify({ url, language }), false);
+    }
+
+    async function submitJob(endpoint, body, isFormData) {
+      showProgress(0, "Submitting to pipeline...", "Dispatching task to worker queue");
+      try {
+        const headers = isFormData ? {} : { 'Content-Type': 'application/json' };
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: headers,
+          body: body
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          alert("Ingestion Error: " + (err.detail || JSON.stringify(err)));
+          hideProgress();
+          return;
+        }
+
+        const data = await res.json();
+        pollJob(data.job_id);
+      } catch (e) {
+        alert("Upload error: " + e.message);
+        hideProgress();
+      }
+    }
+
+    function pollJob(jobId) {
+      if (currentPollingInterval) clearInterval(currentPollingInterval);
+
+      const stageNames = {
+        0: "Stage 0: Queued in task worker",
+        25: "Stage 1: Extracting content & structural hierarchy",
+        50: "Stage 2: Splitting into sentence-boundary chunks",
+        75: "Stage 3: Generating 384-dimensional dense vectors",
+        100: "Stage 4: Publishing enriched vectors to Qdrant!"
+      };
+
+      currentPollingInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`/jobs/${jobId}`);
+          const job = await res.json();
+
+          const desc = stageNames[job.progress] || `Status: ${job.status}`;
+          showProgress(job.progress, `Pipeline Progress (${job.status})`, desc);
+
+          if (job.status === 'completed') {
+            clearInterval(currentPollingInterval);
+            showProgress(100, "Ingestion Complete!", `Published ${job.chunk_count} vectorized chunks to Qdrant.`);
+            setTimeout(() => {
+              hideProgress();
+              refreshData();
+              inspectJobPoints(job.job_id, job.metadata?.filename || 'New Material');
+            }, 1200);
+          } else if (job.status === 'failed' || job.status === 'publish_failed') {
+            clearInterval(currentPollingInterval);
+            alert("Job failed: " + (job.error_details || "Unknown error"));
+            hideProgress();
+            refreshData();
+          }
+        } catch (e) {
+          console.error("Polling error:", e);
+        }
+      }, 800);
+    }
+
+    function showProgress(pct, stage, desc) {
+      const box = document.getElementById('live-progress-box');
+      box.classList.remove('hidden');
+      document.getElementById('live-progress-bar').style.width = pct + '%';
+      document.getElementById('live-progress-pct').innerText = pct + '%';
+      document.getElementById('live-progress-stage').innerText = stage;
+      document.getElementById('live-progress-desc').innerText = desc;
+    }
+
+    function hideProgress() {
+      setTimeout(() => {
+        document.getElementById('live-progress-box').classList.add('hidden');
+      }, 500);
+    }
+
+    // Initial load
+    window.addEventListener('DOMContentLoaded', refreshData);
+  </script>
+</body>
+</html>
