@@ -49,11 +49,11 @@ Ideal for rapid local development and testing without starting a Docker daemon o
 
 3. **Start FastAPI Development Server**:
    ```powershell
-   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
    ```
 
 4. **Access Interactive API Docs**:
-   Navigate to [http://localhost:8000/docs](http://localhost:8000/docs).
+   Navigate to [http://localhost:8000/docs](http://localhost:8000/docs) or [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
 ---
 

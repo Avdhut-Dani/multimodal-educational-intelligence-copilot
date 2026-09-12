@@ -103,9 +103,9 @@ query = "What is the update rule for gradient descent?"
 query_vector = model.encode(query, normalize_embeddings=True).tolist()
 
 # 3. Perform semantic search (e.g. filtered by video lectures)
-search_results = client.query_points(
+search_results = client.search(
     collection_name="education_materials",
-    query=query_vector,
+    query_vector=query_vector,
     query_filter=qmodels.Filter(
         must=[
             qmodels.FieldCondition(
@@ -117,7 +117,7 @@ search_results = client.query_points(
     limit=5,
 )
 
-for hit in search_results.points:
+for hit in search_results:
     payload = hit.payload
     print(f"Score: {hit.score:.4f}")
     print(f"Text: {payload['text'][:100]}...")

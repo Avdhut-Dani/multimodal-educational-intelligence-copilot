@@ -511,6 +511,17 @@
         if (!res.ok) {
           const err = await res.json();
           alert("Ingestion Error: " + (err.detail || JSON.stringify(err)));
+          let errDetail = `Server returned status ${res.status}`;
+          try {
+            const err = await res.json();
+            errDetail = err.detail || JSON.stringify(err);
+          } catch(e) {
+            try {
+              const raw = await res.text();
+              if (raw) errDetail = raw;
+            } catch(e2) {}
+          }
+          alert("Ingestion Error: " + errDetail);
           hideProgress();
           return;
         }
@@ -582,3 +593,4 @@
   </script>
 </body>
 </html>
+

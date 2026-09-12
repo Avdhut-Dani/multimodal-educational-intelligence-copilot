@@ -1,8 +1,15 @@
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
+
+# Ensure virtual environment Scripts is in PATH for ffmpeg and whisper
+scripts_dir = os.path.dirname(sys.executable)
+if scripts_dir and scripts_dir not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = scripts_dir + os.pathsep + os.environ.get("PATH", "")
+
 from app.config.settings import get_settings
 from app.models.exceptions import IngestionError
 from app.models.schemas import KeyframeInfo, VideoSegment
@@ -118,8 +125,20 @@ class VideoProcessor:
 
         return segments, extra_meta, keyframes
 
+    def _get_ffmpeg_bin(self) -> Optional[str]:
+        """Locates ffmpeg executable from PATH or imageio-ffmpeg."""
+        bin_path = shutil.which("ffmpeg")
+        if not bin_path:
+            try:
+                import imageio_ffmpeg
+                bin_path = imageio_ffmpeg.get_ffmpeg_exe()
+            except Exception:
+                pass
+        return bin_path
+
     def _probe_video(self, file_path: str) -> VideoMetadata:
         """Probes video duration and audio track presence using ffprobe or OpenCV fallback."""
+        """Probes video duration and audio track presence using ffmpeg, ffprobe, or OpenCV."""
         duration = 0.0
         has_audio = False
         file_size = os.path.getsize(file_path)
@@ -127,6 +146,9 @@ class VideoProcessor:
         # Try ffprobe first if available
         ffprobe_bin = shutil.which("ffprobe")
         if ffprobe_bin:
+        # 1. Try probing via ffmpeg or ffprobe
+        ffmpeg_bin = self._get_ffmpeg_bin()
+        if ffmpeg_bin:
             try:
                 cmd = [
                     ffprobe_bin,
@@ -142,6 +164,14 @@ class VideoProcessor:
                         if val and val != "N/A":
                             duration = float(val)
                     elif "codec_type=audio" in line:
+                cmd = [ffmpeg_bin, "-i", file_path]
+                res = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+                for line in res.stderr.splitlines():
+                    if "Duration:" in line:
+                        parts = line.split("Duration:")[1].split(",")[0].strip().split(":")
+                        if len(parts) == 3:
+                            duration = float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+                    if "Audio:" in line:
                         has_audio = True
                 if duration > 0:
                     return VideoMetadata(duration=duration, has_audio=has_audio, size_bytes=file_size)
@@ -149,6 +179,7 @@ class VideoProcessor:
                 pass
 
         # Fallback probe via OpenCV if available
+        # 2. Fallback probe via OpenCV if available
         try:
             import cv2
             cap = cv2.VideoCapture(file_path)
@@ -170,6 +201,7 @@ class VideoProcessor:
     def _extract_audio(self, video_path: str, job_id: str) -> Optional[str]:
         """Extracts 16kHz mono audio track using ffmpeg."""
         ffmpeg_bin = shutil.which("ffmpeg")
+        ffmpeg_bin = self._get_ffmpeg_bin()
         if not ffmpeg_bin:
             return None
 
@@ -200,6 +232,7 @@ class VideoProcessor:
 
         try:
             result = model.transcribe(audio_path, verbose=False)
+            result = model.transcribe(audio_path, fp16=False, verbose=False)
             raw_segments = result.get("segments", [])
             for r in raw_segments:
                 text = r.get("text", "").strip()

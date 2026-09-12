@@ -113,6 +113,15 @@ class YouTubeProcessor:
             segments: List[YouTubeSegment] = []
             for item in entries:
                 text = str(item.get("text", "")).strip()
+                if isinstance(item, dict):
+                    text = str(item.get("text", "")).strip()
+                    start_time = float(item.get("start", 0.0))
+                    duration = float(item.get("duration", 0.0))
+                else:
+                    text = str(getattr(item, "text", "")).strip()
+                    start_time = float(getattr(item, "start", 0.0))
+                    duration = float(getattr(item, "duration", 0.0))
+
                 if not text:
                     continue
                 segments.append(
@@ -120,6 +129,8 @@ class YouTubeProcessor:
                         text=text,
                         start_time=float(item.get("start", 0.0)),
                         duration=float(item.get("duration", 0.0)),
+                        start_time=start_time,
+                        duration=duration,
                     )
                 )
 
