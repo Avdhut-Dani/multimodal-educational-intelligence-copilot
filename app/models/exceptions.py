@@ -36,3 +36,4 @@ class PublishingError(IngestionError):
     def __init__(self, message: str = "Vector DB publication failed after maximum retries"):
         super().__init__(message)
         self.message = message
+

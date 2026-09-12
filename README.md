@@ -97,3 +97,4 @@ pytest -v
 
 ## 🤝 Handoff for Team 4b
 See [TEAM_4B_HANDOFF.md](file:///d:/Avdhut/programing/Accion%20labs%20project/TEAM_4B_HANDOFF.md) for the complete collection schema, metadata attributes, and sample query code.
+

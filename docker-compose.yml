@@ -53,3 +53,4 @@ services:
 
 volumes:
   qdrant_data:
+

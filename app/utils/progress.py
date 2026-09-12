@@ -174,3 +174,4 @@ def get_progress_tracker() -> JobProgressTracker:
     if _global_tracker is None:
         _global_tracker = JobProgressTracker()
     return _global_tracker
+

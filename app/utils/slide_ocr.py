@@ -41,3 +41,4 @@ class SlideOCR:
             return " ".join(lines)
         except Exception:
             return None
+

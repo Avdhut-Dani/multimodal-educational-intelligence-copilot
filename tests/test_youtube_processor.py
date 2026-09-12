@@ -34,7 +34,7 @@ def test_property_8_and_9_transcript_and_metadata_preservation():
         "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     }
 
-    with patch("app.processors.youtube_processor.YouTubeTranscriptApi.list_transcripts", return_value=mock_list), \
+    with patch.object(processor, "_list_transcripts", return_value=mock_list), \
          patch.object(processor, "_fetch_metadata", return_value=mock_meta):
 
         segments, meta = processor.process("https://www.youtube.com/watch?v=dQw4w9WgXcQ", language="en")
@@ -53,11 +53,11 @@ def test_property_8_and_9_transcript_and_metadata_preservation():
 def test_property_10_transcripts_disabled_error():
     """Property 10: Video without captions raises TranscriptUnavailableError."""
     processor = YouTubeProcessor()
-    with patch("app.processors.youtube_processor.YouTubeTranscriptApi.list_transcripts") as mock_list, \
-         patch.object(processor, "_fetch_metadata", return_value={"title": "Test", "channel": "C", "duration": 10}):
+    from youtube_transcript_api import TranscriptsDisabled
 
-        from youtube_transcript_api import TranscriptsDisabled
-        mock_list.side_effect = TranscriptsDisabled("Video captions disabled")
+    with patch.object(processor, "_list_transcripts", side_effect=TranscriptsDisabled("Video captions disabled")), \
+         patch.object(processor, "_fetch_metadata", return_value={"title": "Test", "channel": "C", "duration": 10}):
 
         with pytest.raises(TranscriptUnavailableError):
             processor.process("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+

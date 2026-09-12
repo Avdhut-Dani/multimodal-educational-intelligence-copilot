@@ -279,3 +279,4 @@ def process_youtube(self, url: str, language: str = "en", job_id: str = None):
     except Exception as e:
         tracker.update_progress(task_id, 0, JobStatus.FAILED, error_details=str(e))
         raise
+

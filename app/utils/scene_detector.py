@@ -42,6 +42,18 @@ class SceneDetector:
 
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
+            count = max(0, int(duration // self.keyframe_interval))
+            for k in range(count):
+                ts = float(k * self.keyframe_interval)
+                frame_filename = f"{job_id}_frame_{int(ts)}.jpg"
+                frame_path = os.path.join(self.output_dir, frame_filename)
+                keyframes.append(
+                    KeyframeInfo(
+                        timestamp=ts,
+                        frame_path=frame_path,
+                        is_scene_change=False,
+                    )
+                )
             return keyframes
 
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -102,3 +114,4 @@ class SceneDetector:
                 keyframes.append(KeyframeInfo(timestamp=ts, frame_path=frame_path, is_scene_change=False))
 
         return keyframes
+

@@ -85,10 +85,17 @@ class YouTubeProcessor:
                 "url": url,
             }
 
+    def _list_transcripts(self, video_id: str):
+        """Helper to fetch transcript list across different youtube-transcript-api versions."""
+        if hasattr(YouTubeTranscriptApi, "list_transcripts"):
+            return YouTubeTranscriptApi.list_transcripts(video_id)
+        api = YouTubeTranscriptApi()
+        return api.list(video_id)
+
     def _fetch_transcript(self, video_id: str, language: str = "en") -> List[YouTubeSegment]:
         """Fetches timed transcript segments using YouTube Transcript API."""
         try:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            transcript_list = self._list_transcripts(video_id)
             # Property 11: Attempt preference language, fallback to English or auto-generated
             try:
                 transcript = transcript_list.find_transcript([language])
@@ -129,3 +136,4 @@ class YouTubeProcessor:
             if "disabled" in err_str or "no transcript" in err_str:
                 raise TranscriptUnavailableError(str(e))
             raise VideoInaccessibleError(f"Cannot access transcript for {video_id}: {str(e)}")
+

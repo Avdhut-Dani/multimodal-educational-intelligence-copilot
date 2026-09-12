@@ -53,3 +53,4 @@ class MetadataEnricher:
             "text": chunk_text,
             "metadata": base_metadata,
         }
+

@@ -2,7 +2,10 @@ import os
 import shutil
 import tempfile
 from typing import Generator
-import fitz
+try:
+    import pymupdf as fitz
+except ImportError:
+    import fitz
 import pytest
 from app.config.settings import Settings, get_settings
 
@@ -104,3 +107,4 @@ def encrypted_pdf(tmp_path) -> str:
     )
     doc.close()
     return pdf_path
+

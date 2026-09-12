@@ -49,3 +49,4 @@ def test_property_19_oversized_input_truncation():
     assert len(embeddings) == 1
     assert embeddings[0].shape == (384,)
     assert pytest.approx(np.linalg.norm(embeddings[0]), abs=1e-5) == 1.0
+

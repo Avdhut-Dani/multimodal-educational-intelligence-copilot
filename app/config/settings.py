@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,6 +9,13 @@ class Settings(BaseSettings):
     APP_NAME: str = "Multi-Modal Educational Data Ingestion Subsystem (Team 4a)"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, v):
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on", "debug")
+        return bool(v)
 
     # Qdrant Vector DB Configuration
     # Modes: "embedded" (stored on disk/memory, ideal for local lightweight dev) or "server" (connects to Qdrant service)
@@ -70,3 +78,4 @@ def get_settings() -> Settings:
     if settings.QDRANT_MODE == "embedded":
         os.makedirs(settings.QDRANT_PATH, exist_ok=True)
     return settings
+

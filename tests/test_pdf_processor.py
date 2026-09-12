@@ -1,4 +1,7 @@
-import fitz
+try:
+    import pymupdf as fitz
+except ImportError:
+    import fitz
 import pytest
 from app.models.exceptions import PDFUnreadableError
 from app.processors.pdf_processor import PDFProcessor
@@ -73,3 +76,4 @@ def test_novelty_3_table_extraction(tmp_path):
     segments = processor.process(pdf_path)
     assert len(segments) == 1
     assert "Evaluation Metrics" in segments[0].text
+

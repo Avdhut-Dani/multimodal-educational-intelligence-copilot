@@ -103,9 +103,9 @@ query = "What is the update rule for gradient descent?"
 query_vector = model.encode(query, normalize_embeddings=True).tolist()
 
 # 3. Perform semantic search (e.g. filtered by video lectures)
-search_results = client.search(
+search_results = client.query_points(
     collection_name="education_materials",
-    query_vector=query_vector,
+    query=query_vector,
     query_filter=qmodels.Filter(
         must=[
             qmodels.FieldCondition(
@@ -117,7 +117,7 @@ search_results = client.search(
     limit=5,
 )
 
-for hit in search_results:
+for hit in search_results.points:
     payload = hit.payload
     print(f"Score: {hit.score:.4f}")
     print(f"Text: {payload['text'][:100]}...")
@@ -133,3 +133,4 @@ When Team 4b synthesizes a response for the user, retrieve the `start_timestamp`
 `[Timestamp: 02:05](seek://125)`
 
 Team 4c's video player will listen for `seek://{start_timestamp}` and jump directly to that exact second in the lecture video!
+

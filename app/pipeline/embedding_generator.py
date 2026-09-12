@@ -69,3 +69,4 @@ class EmbeddingGenerator:
             fallback_embeddings.append(vec)
 
         return fallback_embeddings
+

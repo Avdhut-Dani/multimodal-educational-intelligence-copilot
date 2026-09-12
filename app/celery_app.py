@@ -19,3 +19,4 @@ celery_app.conf.update(
     worker_concurrency=settings.CELERY_WORKER_CONCURRENCY,
     result_expires=86400,
 )
+

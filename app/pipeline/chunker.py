@@ -111,3 +111,4 @@ class Chunker:
             chunks.append(" ".join(current_sentences))
 
         return chunks
+

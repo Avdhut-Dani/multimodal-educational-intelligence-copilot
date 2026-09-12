@@ -122,3 +122,4 @@ class VectorDBPublisher:
                     time.sleep(sleep_time)
 
         raise last_exception or PublishingError("Publication failed")
+

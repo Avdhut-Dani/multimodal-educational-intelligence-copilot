@@ -64,3 +64,4 @@ def test_property_12_short_text_single_chunk():
     assert chunks[0].text == short_text
     assert chunks[0].chunk_index == 0
     assert chunks[0].total_chunks == 1
+

@@ -59,3 +59,4 @@ def test_property_7_transcription_failure_isolation():
 
         assert len(segments) >= 1
         assert segments[0].status == "transcription_failed"
+

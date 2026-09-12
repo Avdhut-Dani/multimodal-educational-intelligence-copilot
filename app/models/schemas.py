@@ -81,3 +81,4 @@ class KeyframeInfo(BaseModel):
     frame_path: str
     is_scene_change: bool = False
     ocr_text: Optional[str] = None
+

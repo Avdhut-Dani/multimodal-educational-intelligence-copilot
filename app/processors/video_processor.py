@@ -231,3 +231,4 @@ class VideoProcessor:
         if not keyframes:
             return None
         return min(keyframes, key=lambda k: abs(k.timestamp - timestamp))
+

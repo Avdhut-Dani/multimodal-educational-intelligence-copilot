@@ -125,3 +125,4 @@ def test_property_24_retry_exponential_backoff():
 
     # Verify exactly 3 attempts were made
     assert mock_client.upsert.call_count == 3
+

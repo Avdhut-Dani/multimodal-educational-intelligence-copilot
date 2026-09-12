@@ -1,6 +1,9 @@
 import os
 from typing import Any, Dict, List
-import fitz  # PyMuPDF
+try:
+    import pymupdf as fitz
+except ImportError:
+    import fitz
 from app.config.settings import get_settings
 from app.models.exceptions import PDFUnreadableError
 from app.models.schemas import PDFSegment
@@ -100,9 +103,13 @@ class PDFProcessor:
         if not font_sizes:
             return headings
 
-        # Approximate body size using median or average
-        font_sizes.sort()
-        body_size = font_sizes[len(font_sizes) // 2]
+        # Determine body text size using most frequent font size (or min font size)
+        from collections import Counter
+        counts = Counter(font_sizes)
+        # Most common font size; if all equal frequency, use min font size
+        max_freq = max(counts.values())
+        candidates = [size for size, cnt in counts.items() if cnt == max_freq]
+        body_size = min(candidates)
 
         for b in blocks:
             if b.get("type") == 0:
@@ -163,3 +170,4 @@ class PDFProcessor:
             pass
 
         return md_tables
+
