@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from typing import Optional
@@ -13,6 +14,7 @@ from app.models.schemas import (
 from app.tasks import process_pdf, process_video, process_youtube
 from app.utils.progress import get_progress_tracker
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 settings = get_settings()
 tracker = get_progress_tracker()
@@ -51,9 +53,14 @@ async def ingest_pdf(file: UploadFile = File(...)):
     tracker.create_job(job_id=job_id, source_type="pdf", metadata={"filename": file.filename})
 
     # Dispatch to Celery worker (or eager execution in lightweight mode)
-    process_pdf.delay(file_path=file_path, job_id=job_id)
+    try:
+        process_pdf.delay(file_path=file_path, job_id=job_id)
+    except Exception as e:
+        logger.warning(f"Task execution for PDF job {job_id} encountered error: {e}")
 
-    return JobResponse(job_id=job_id, status=JobStatus.QUEUED)
+    job = tracker.get_job(job_id)
+    current_status = job.status if job else JobStatus.QUEUED
+    return JobResponse(job_id=job_id, status=current_status)
 
 
 @router.post(
@@ -74,9 +81,14 @@ async def ingest_video(file: UploadFile = File(...)):
     job_id = str(uuid.uuid4())
 
     tracker.create_job(job_id=job_id, source_type="mp4", metadata={"filename": file.filename})
-    process_video.delay(file_path=file_path, job_id=job_id)
+    try:
+        process_video.delay(file_path=file_path, job_id=job_id)
+    except Exception as e:
+        logger.warning(f"Task execution for video job {job_id} encountered error: {e}")
 
-    return JobResponse(job_id=job_id, status=JobStatus.QUEUED)
+    job = tracker.get_job(job_id)
+    current_status = job.status if job else JobStatus.QUEUED
+    return JobResponse(job_id=job_id, status=current_status)
 
 
 @router.post(
@@ -90,9 +102,14 @@ async def ingest_youtube(request: YouTubeRequest):
     job_id = str(uuid.uuid4())
 
     tracker.create_job(job_id=job_id, source_type="youtube", metadata={"url": url_str})
-    process_youtube.delay(url=url_str, language=request.language, job_id=job_id)
+    try:
+        process_youtube.delay(url=url_str, language=request.language, job_id=job_id)
+    except Exception as e:
+        logger.warning(f"Task execution for YouTube job {job_id} encountered error: {e}")
 
-    return JobResponse(job_id=job_id, status=JobStatus.QUEUED)
+    job = tracker.get_job(job_id)
+    current_status = job.status if job else JobStatus.QUEUED
+    return JobResponse(job_id=job_id, status=current_status)
 
 
 @router.get(

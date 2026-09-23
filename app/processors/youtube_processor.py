@@ -112,7 +112,6 @@ class YouTubeProcessor:
 
             segments: List[YouTubeSegment] = []
             for item in entries:
-                text = str(item.get("text", "")).strip()
                 if isinstance(item, dict):
                     text = str(item.get("text", "")).strip()
                     start_time = float(item.get("start", 0.0))
@@ -127,8 +126,6 @@ class YouTubeProcessor:
                 segments.append(
                     YouTubeSegment(
                         text=text,
-                        start_time=float(item.get("start", 0.0)),
-                        duration=float(item.get("duration", 0.0)),
                         start_time=start_time,
                         duration=duration,
                     )
@@ -138,13 +135,23 @@ class YouTubeProcessor:
 
         except (TranscriptsDisabled, NoTranscriptFound):
             raise TranscriptUnavailableError(f"Transcripts disabled or not found for video {video_id}")
+            raise TranscriptUnavailableError(
+                f"Subtitles/closed captions are disabled or not available for YouTube video '{video_id}'. "
+                f"Please choose an educational video with English captions enabled, or upload the MP4 video directly."
+            )
         except VideoUnavailable:
             raise VideoInaccessibleError(f"Video {video_id} is unavailable or private")
+            raise VideoInaccessibleError(f"YouTube video '{video_id}' is unavailable or private.")
         except (TranscriptUnavailableError, VideoInaccessibleError):
             raise
         except Exception as e:
             err_str = str(e).lower()
             if "disabled" in err_str or "no transcript" in err_str:
                 raise TranscriptUnavailableError(str(e))
+            if "disabled" in err_str or "no transcript" in err_str or "subtitles are disabled" in err_str:
+                raise TranscriptUnavailableError(
+                    f"Subtitles/closed captions are disabled or not available for YouTube video '{video_id}'. "
+                    f"Please choose an educational video with English captions enabled, or upload the MP4 video directly."
+                )
             raise VideoInaccessibleError(f"Cannot access transcript for {video_id}: {str(e)}")
 
