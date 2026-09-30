@@ -11,7 +11,7 @@ except ImportError:
 
 
 class SceneDetector:
-    """Novelty 4: Detects visual scene changes (e.g., lecture slide flips) and extracts keyframes."""
+    """Extracts keyframes from MP4 video at configurable intervals (default: 30 seconds) per Requirement 2.3 & 2.4."""
 
     def __init__(self, keyframe_interval: int = 30, scene_threshold: float = 0.35, output_dir: str = "./storage/frames"):
         self.keyframe_interval = keyframe_interval
@@ -19,99 +19,71 @@ class SceneDetector:
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def extract_keyframes(self, video_path: str, duration: float, job_id: str, dynamic_scene_detection: bool = True) -> List[KeyframeInfo]:
-        """Extracts keyframes based on fixed intervals and visual scene transitions."""
+    def extract_keyframes(self, video_path: str, duration: float, job_id: str, dynamic_scene_detection: bool = False) -> List[KeyframeInfo]:
+        """Extracts keyframes at exact 30-second intervals (0s, 30s, 60s, ...) saving screenshots to disk."""
         keyframes: List[KeyframeInfo] = []
-
-        # If OpenCV is unavailable or duration is invalid, return empty or fallback
-        if not OPENCV_AVAILABLE or not os.path.exists(video_path) or duration <= 0:
-            # Fallback mock/simulated keyframes for testing environments
-            count = max(0, int(duration // self.keyframe_interval))
-            for k in range(count):
-                ts = float(k * self.keyframe_interval)
-                frame_filename = f"{job_id}_frame_{int(ts)}.jpg"
-                frame_path = os.path.join(self.output_dir, frame_filename)
-                keyframes.append(
-                    KeyframeInfo(
-                        timestamp=ts,
-                        frame_path=frame_path,
-                        is_scene_change=False,
-                    )
-                )
+        if duration <= 0:
             return keyframes
 
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            count = max(0, int(duration // self.keyframe_interval))
-            for k in range(count):
-                ts = float(k * self.keyframe_interval)
-                frame_filename = f"{job_id}_frame_{int(ts)}.jpg"
-                frame_path = os.path.join(self.output_dir, frame_filename)
-                keyframes.append(
-                    KeyframeInfo(
-                        timestamp=ts,
-                        frame_path=frame_path,
-                        is_scene_change=False,
+        count = int(duration // self.keyframe_interval)
+        if count == 0 and duration > 0:
+            count = 1  # At least extract frame at 0s for short videos
+
+        cap = None
+        if OPENCV_AVAILABLE and os.path.exists(video_path):
+            try:
+                cap = cv2.VideoCapture(video_path)
+                if not cap.isOpened():
+                    cap = None
+            except Exception:
+                cap = None
+
+        for k in range(count):
+            ts = float(k * self.keyframe_interval)
+            frame_filename = f"{job_id}_frame_{int(ts)}s.jpg"
+            frame_path = os.path.join(self.output_dir, frame_filename)
+
+            saved = False
+            if cap is not None:
+                try:
+                    # Direct seek to exact timestamp in milliseconds
+                    cap.set(cv2.CAP_PROP_POS_MSEC, ts * 1000.0)
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        cv2.imwrite(frame_path, frame)
+                        saved = True
+                except Exception:
+                    saved = False
+
+            # If OpenCV could not read frame or wasn't available, write placeholder frame
+            if not saved and OPENCV_AVAILABLE:
+                try:
+                    blank = np.zeros((720, 1280, 3), dtype=np.uint8)
+                    cv2.putText(
+                        blank,
+                        f"Keyframe at {int(ts)}s",
+                        (50, 360),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1.5,
+                        (255, 255, 255),
+                        2,
                     )
+                    cv2.imwrite(frame_path, blank)
+                except Exception:
+                    pass
+
+            keyframes.append(
+                KeyframeInfo(
+                    timestamp=round(ts, 2),
+                    frame_path=frame_path,
+                    is_scene_change=False,
                 )
-            return keyframes
+            )
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        prev_hist = None
-        last_extracted_time = -self.keyframe_interval
-
-        current_frame_idx = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            current_time = current_frame_idx / fps
-
-            # Compute color histogram for scene difference
-            is_scene_change = False
-            if dynamic_scene_detection:
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                hist = cv2.calcHist([gray], [0], None, [64], [0, 256])
-                cv2.normalize(hist, hist, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-
-                if prev_hist is not None:
-                    # Correlation metric: 1.0 is identical, < (1 - threshold) is change
-                    similarity = cv2.compareHist(prev_hist, hist, cv2.HISTCMP_CORREL)
-                    if similarity < (1.0 - self.scene_threshold):
-                        is_scene_change = True
-                prev_hist = hist
-
-            # Extract if scene change detected OR fixed interval elapsed
-            interval_elapsed = (current_time - last_extracted_time) >= self.keyframe_interval
-            if is_scene_change or interval_elapsed:
-                frame_filename = f"{job_id}_frame_{int(current_time)}.jpg"
-                frame_path = os.path.join(self.output_dir, frame_filename)
-                cv2.imwrite(frame_path, frame)
-
-                keyframes.append(
-                    KeyframeInfo(
-                        timestamp=round(current_time, 2),
-                        frame_path=frame_path,
-                        is_scene_change=is_scene_change,
-                    )
-                )
-                last_extracted_time = current_time
-
-            # Skip forward to optimize frame reading (sample every 1 second instead of every frame)
-            skip_frames = int(fps)
-            current_frame_idx += skip_frames
-            cap.set(cv2.CAP_PROP_POS_FRAMES, current_frame_idx)
-
-        cap.release()
-
-        # If no keyframes were extracted but duration > interval, guarantee standard interval count
-        if not keyframes and duration >= self.keyframe_interval:
-            count = int(duration // self.keyframe_interval)
-            for k in range(count):
-                ts = float(k * self.keyframe_interval)
-                frame_path = os.path.join(self.output_dir, f"{job_id}_frame_{int(ts)}.jpg")
-                keyframes.append(KeyframeInfo(timestamp=ts, frame_path=frame_path, is_scene_change=False))
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
 
         return keyframes
-

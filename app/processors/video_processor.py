@@ -14,7 +14,6 @@ from app.config.settings import get_settings
 from app.models.exceptions import IngestionError
 from app.models.schemas import KeyframeInfo, VideoSegment
 from app.utils.scene_detector import SceneDetector
-from app.utils.slide_ocr import SlideOCR
 
 try:
     import whisper
@@ -31,19 +30,20 @@ class VideoMetadata:
 
 
 class VideoProcessor:
-    """Processes MP4 video files into timestamped audio transcripts and visual keyframes."""
+    """Processes MP4 video files into timestamped audio transcripts and 30-second interval keyframe snapshots.
+    Complies strictly with Requirement 2 (Acceptance Criteria 1 through 7).
+    """
 
     def __init__(self, settings=None):
         self.settings = settings or get_settings()
-        self.keyframe_interval = self.settings.KEYFRAME_INTERVAL
-        self.max_size_bytes = self.settings.MAX_VIDEO_SIZE_BYTES
-        self.max_duration_seconds = self.settings.MAX_VIDEO_DURATION_HOURS * 3600
+        self.keyframe_interval = self.settings.KEYFRAME_INTERVAL  # Default: 30 seconds
+        self.max_size_bytes = self.settings.MAX_VIDEO_SIZE_BYTES  # 2 GB (Requirement 2.7)
+        self.max_duration_seconds = self.settings.MAX_VIDEO_DURATION_HOURS * 3600  # 4 Hours (Requirement 2.7)
         self.whisper_model_name = self.settings.WHISPER_MODEL_SIZE
         self.scene_detector = SceneDetector(
             keyframe_interval=self.keyframe_interval,
             output_dir=self.settings.FRAME_DIR,
         )
-        self.slide_ocr = SlideOCR(enabled=self.settings.SLIDE_OCR_ENABLED)
         self._whisper_model = None
 
     def _get_whisper_model(self):
@@ -56,26 +56,23 @@ class VideoProcessor:
         if not os.path.exists(file_path):
             raise IngestionError(f"Video file not found: {file_path}")
 
+        # Requirement 2.7: Support up to 2GB in size
         file_size = os.path.getsize(file_path)
         if file_size > self.max_size_bytes:
-            raise IngestionError(f"Video file size {file_size} exceeds maximum limit {self.max_size_bytes} bytes")
+            raise IngestionError(f"Video file size {file_size} exceeds maximum limit {self.max_size_bytes} bytes (2GB)")
 
         metadata = self._probe_video(file_path)
+        # Requirement 2.7: Support up to 4 hours in duration
         if metadata.duration > self.max_duration_seconds:
-            raise IngestionError(f"Video duration {metadata.duration}s exceeds maximum limit {self.max_duration_seconds}s")
+            raise IngestionError(f"Video duration {metadata.duration}s exceeds maximum limit {self.max_duration_seconds}s (4h)")
 
-        # 1. Extract Keyframes (Novelty 4 dynamic scene detection + interval)
+        # Requirement 2.3 & 2.4: Extract keyframes at configurable interval (default: 30s)
         keyframes = self.scene_detector.extract_keyframes(
             video_path=file_path,
             duration=metadata.duration,
             job_id=job_id,
-            dynamic_scene_detection=self.settings.SCENE_DETECTION_ENABLED,
+            dynamic_scene_detection=False,
         )
-
-        # 2. Extract slide text from keyframes (Novelty 1)
-        if self.settings.SLIDE_OCR_ENABLED:
-            for kf in keyframes:
-                kf.ocr_text = self.slide_ocr.extract_text_from_frame(kf.frame_path)
 
         segments: List[VideoSegment] = []
         extra_meta: Dict[str, Any] = {
@@ -85,7 +82,7 @@ class VideoProcessor:
             "keyframe_count": len(keyframes),
         }
 
-        # 3. Audio Extraction & Transcription
+        # Requirement 2.1 & 2.2: Audio Extraction & Transcription
         if metadata.has_audio:
             audio_path = self._extract_audio(file_path, job_id)
             if audio_path and os.path.exists(audio_path):
@@ -96,32 +93,38 @@ class VideoProcessor:
                     os.remove(audio_path)
                 except Exception:
                     pass
-        else:
-            # Audio absent condition (Requirement 2.5): Proceed with frames only
-            # Synthesize segments from keyframes so visual educational slides are still retrievable!
-            for kf in keyframes:
-                text_content = f"[Visual Frame at {int(kf.timestamp)}s]"
-                if kf.ocr_text:
-                    text_content = f"{text_content} Slide content: {kf.ocr_text}"
-
+            else:
+                # Audio extraction failed
                 segments.append(
                     VideoSegment(
-                        text=text_content,
+                        text="[Audio Extraction Failed: unable to demux audio stream]",
+                        start_time=0.0,
+                        end_time=0.0,
+                        status="transcription_failed",
+                    )
+                )
+        else:
+            # Requirement 2.5: audio_absent condition -> proceed with frames only
+            extra_meta["audio_absent"] = True
+            for kf in keyframes:
+                segments.append(
+                    VideoSegment(
+                        text=f"[Video Keyframe at {int(kf.timestamp)}s]",
                         start_time=kf.timestamp,
                         end_time=kf.timestamp + self.keyframe_interval,
                         frame_reference=kf.frame_path,
-                        visual_text=kf.ocr_text,
+                        visual_text=f"Keyframe captured at {int(kf.timestamp)}s",
                         status="ok",
                     )
                 )
 
-        # 4. Associate visual OCR text & nearest keyframe with audio segments
+        # Requirement 2.4: Associate each keyframe with its corresponding timestamp
         for seg in segments:
             closest_kf = self._find_closest_keyframe(seg.start_time, keyframes)
             if closest_kf:
                 seg.frame_reference = closest_kf.frame_path
-                if closest_kf.ocr_text and not seg.visual_text:
-                    seg.visual_text = closest_kf.ocr_text
+                if not seg.visual_text:
+                    seg.visual_text = f"Keyframe captured at {int(closest_kf.timestamp)}s"
 
         return segments, extra_meta, keyframes
 
@@ -137,33 +140,15 @@ class VideoProcessor:
         return bin_path
 
     def _probe_video(self, file_path: str) -> VideoMetadata:
-        """Probes video duration and audio track presence using ffprobe or OpenCV fallback."""
-        """Probes video duration and audio track presence using ffmpeg, ffprobe, or OpenCV."""
+        """Probes video duration and audio track presence using ffmpeg or OpenCV."""
         duration = 0.0
         has_audio = False
         file_size = os.path.getsize(file_path)
 
-        # Try ffprobe first if available
-        ffprobe_bin = shutil.which("ffprobe")
-        if ffprobe_bin:
-        # 1. Try probing via ffmpeg or ffprobe
+        # 1. Try probing via ffmpeg
         ffmpeg_bin = self._get_ffmpeg_bin()
         if ffmpeg_bin:
             try:
-                cmd = [
-                    ffprobe_bin,
-                    "-v", "error",
-                    "-show_entries", "format=duration:stream=codec_type",
-                    "-of", "default=noprint_wrappers=1",
-                    file_path,
-                ]
-                output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, text=True)
-                for line in output.splitlines():
-                    if line.startswith("duration="):
-                        val = line.split("=")[1].strip()
-                        if val and val != "N/A":
-                            duration = float(val)
-                    elif "codec_type=audio" in line:
                 cmd = [ffmpeg_bin, "-i", file_path]
                 res = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
                 for line in res.stderr.splitlines():
@@ -178,7 +163,6 @@ class VideoProcessor:
             except Exception:
                 pass
 
-        # Fallback probe via OpenCV if available
         # 2. Fallback probe via OpenCV if available
         try:
             import cv2
@@ -193,14 +177,12 @@ class VideoProcessor:
             pass
 
         if duration <= 0:
-            # Default minimum fallback duration if probe fails
             duration = 60.0
 
         return VideoMetadata(duration=duration, has_audio=has_audio, size_bytes=file_size)
 
     def _extract_audio(self, video_path: str, job_id: str) -> Optional[str]:
         """Extracts 16kHz mono audio track using ffmpeg."""
-        ffmpeg_bin = shutil.which("ffmpeg")
         ffmpeg_bin = self._get_ffmpeg_bin()
         if not ffmpeg_bin:
             return None
@@ -223,15 +205,34 @@ class VideoProcessor:
             return None
 
     def _transcribe_audio(self, audio_path: str) -> List[VideoSegment]:
-        """Transcribes audio using Whisper, capturing segment timestamps with isolation on failure."""
+        """Transcribes audio using Groq Whisper API (if key provided) or local Whisper, capturing timestamps."""
         segments: List[VideoSegment] = []
+
+        # 1. Check for Groq API Key
+        groq_api_key = self.settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
+        if groq_api_key:
+            try:
+                groq_segments = self._transcribe_with_groq(audio_path, groq_api_key)
+                if groq_segments:
+                    return groq_segments
+            except Exception as e:
+                print(f"[VideoProcessor] Groq transcription warning: {e}. Falling back to local Whisper...")
+
+        # 2. Local Whisper model fallback
         model = self._get_whisper_model()
         if model is None:
-            # Whisper not loaded / available in test environment
+            segments.append(
+                VideoSegment(
+                    text="[Audio Transcription Failed: Whisper model unavailable]",
+                    start_time=0.0,
+                    end_time=0.0,
+                    status="transcription_failed",
+                )
+            )
             return segments
 
         try:
-            result = model.transcribe(audio_path, verbose=False)
+            # fp16=False ensures CPU compatibility on Windows
             result = model.transcribe(audio_path, fp16=False, verbose=False)
             raw_segments = result.get("segments", [])
             for r in raw_segments:
@@ -246,14 +247,65 @@ class VideoProcessor:
                         status="ok",
                     )
                 )
-        except Exception:
-            # Transcription failure isolation (Property 7): Mark as failed
+        except Exception as e:
+            # Requirement 2.6: Transcription failure isolation
             segments.append(
                 VideoSegment(
-                    text="[Audio Transcription Failed]",
+                    text=f"[Audio Transcription Failed: {str(e)}]",
                     start_time=0.0,
                     end_time=0.0,
                     status="transcription_failed",
+                )
+            )
+
+        return segments
+
+    def _transcribe_with_groq(self, audio_path: str, api_key: str) -> List[VideoSegment]:
+        """Calls Groq's high-speed Whisper cloud API for audio transcription."""
+        import requests
+
+        groq_url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        headers = {"Authorization": f"Bearer {api_key}"}
+        data = {
+            "model": self.settings.GROQ_WHISPER_MODEL,
+            "response_format": "verbose_json",
+            "timestamp_granularities[]": "segment",
+            "temperature": 0.2,
+        }
+
+        filename = os.path.basename(audio_path)
+        mime_type = "audio/wav" if filename.endswith(".wav") else "audio/mpeg"
+
+        with open(audio_path, "rb") as f:
+            files = {"file": (filename, f, mime_type)}
+            response = requests.post(groq_url, headers=headers, data=data, files=files, timeout=300)
+
+        if response.status_code != 200:
+            raise RuntimeError(f"Groq API returned status {response.status_code}: {response.text}")
+
+        res_json = response.json()
+        segments: List[VideoSegment] = []
+        raw_segments = res_json.get("segments", [])
+        for r in raw_segments:
+            text = r.get("text", "").strip()
+            if not text:
+                continue
+            segments.append(
+                VideoSegment(
+                    text=text,
+                    start_time=round(float(r.get("start", 0.0)), 2),
+                    end_time=round(float(r.get("end", 0.0)), 2),
+                    status="ok",
+                )
+            )
+
+        if not segments and res_json.get("text"):
+            segments.append(
+                VideoSegment(
+                    text=res_json["text"].strip(),
+                    start_time=0.0,
+                    end_time=0.0,
+                    status="ok",
                 )
             )
 
@@ -264,4 +316,3 @@ class VideoProcessor:
         if not keyframes:
             return None
         return min(keyframes, key=lambda k: abs(k.timestamp - timestamp))
-

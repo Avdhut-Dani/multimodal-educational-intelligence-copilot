@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from typing import Optional
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -45,19 +46,21 @@ class Settings(BaseSettings):
     PUBLISH_INITIAL_BACKOFF: float = 2.0
 
     # Video & Keyframe Settings
-    KEYFRAME_INTERVAL: int = 30  # seconds
+    KEYFRAME_INTERVAL: int = 30  # seconds (Requirement 2.3: default 30s)
     WHISPER_MODEL_SIZE: str = "tiny"  # "tiny", "base", "small" for local fast inference
-    MAX_VIDEO_SIZE_BYTES: int = 2 * 1024 * 1024 * 1024  # 2 GB
-    MAX_VIDEO_DURATION_HOURS: float = 4.0
+    GROQ_API_KEY: Optional[str] = None  # Optional Groq Cloud Whisper API key for high-speed transcription
+    GROQ_WHISPER_MODEL: str = "whisper-large-v3"
+    MAX_VIDEO_SIZE_BYTES: int = 2 * 1024 * 1024 * 1024  # 2 GB (Requirement 2.7)
+    MAX_VIDEO_DURATION_HOURS: float = 4.0               # 4 hours (Requirement 2.7)
 
     # PDF Settings
     MAX_PDF_SIZE_BYTES: int = 200 * 1024 * 1024  # 200 MB
     MAX_PDF_PAGES: int = 5000
 
-    # Novelty Flags
-    SLIDE_OCR_ENABLED: bool = True               # Novelty 1: Slide & visual diagram OCR
-    PDF_TABLE_EXTRACTION_ENABLED: bool = True    # Novelty 3: Table-to-Markdown & equation preservation
-    SCENE_DETECTION_ENABLED: bool = True         # Novelty 4: Dynamic keyframe extraction on visual scene changes
+    # Feature Flags
+    SLIDE_OCR_ENABLED: bool = False              # Set to False to focus strictly on company 30s keyframe requirement
+    PDF_TABLE_EXTRACTION_ENABLED: bool = True    # Academic Table-to-Markdown preservation
+    SCENE_DETECTION_ENABLED: bool = False        # Set to False for strict 30s interval frame capture
 
     # Storage Paths
     UPLOAD_DIR: str = "./storage/uploads"
