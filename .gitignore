@@ -51,3 +51,7 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Test media and sample directories
+Multimodel_educational_intelligence_copilot-main/
+acion labs testing videos/
+

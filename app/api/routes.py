@@ -155,6 +155,7 @@ async def list_jobs(
 async def get_catalog_points(
     job_id: Optional[str] = Query(default=None, description="Optional job ID filter"),
     limit: int = Query(default=50, ge=1, le=200, description="Max points to return"),
+    with_vectors: bool = Query(default=True, description="Include raw 384-d vector embeddings in response"),
 ):
     from qdrant_client import QdrantClient
     from qdrant_client.http import models as qmodels
@@ -181,17 +182,22 @@ async def get_catalog_points(
             scroll_filter=q_filter,
             limit=limit,
             with_payload=True,
-            with_vectors=False,
+            with_vectors=with_vectors,
         )
         col_info = client.get_collection(settings.QDRANT_COLLECTION)
 
         points_data = []
         for pt in scroll_res[0]:
-            points_data.append({
+            pt_dict = {
                 "id": str(pt.id),
                 "text": pt.payload.get("text", "") if pt.payload else "",
                 "metadata": pt.payload.get("metadata", {}) if pt.payload else {},
-            })
+            }
+            if with_vectors and pt.vector is not None:
+                vec = pt.vector if isinstance(pt.vector, list) else list(pt.vector)
+                pt_dict["vector_dim"] = len(vec)
+                pt_dict["vector"] = [round(v, 4) for v in vec]
+            points_data.append(pt_dict)
 
         return {
             "collection": settings.QDRANT_COLLECTION,

@@ -448,6 +448,17 @@
                 <span>Vector: 384-d L2</span>
                 <span class="text-emerald-500">Ready for Team 4b</span>
               </div>
+              ${pt.vector ? `
+                <details class="mt-2 text-[10px]">
+                  <summary class="cursor-pointer text-indigo-400 hover:text-indigo-300 font-mono font-medium flex items-center space-x-1">
+                    <i class="fa-solid fa-cube text-[9px]"></i>
+                    <span>Inspect Raw Vector (384 dimensions)</span>
+                  </summary>
+                  <div class="mt-1.5 p-2 bg-slate-950 rounded border border-slate-800/80 font-mono text-[9px] text-emerald-400 break-all max-h-24 overflow-y-auto custom-scroll">
+                    [${pt.vector.slice(0, 20).join(', ')}, ... +${pt.vector.length - 20} more floats]
+                  </div>
+                </details>
+              ` : ''}
             </div>
           `;
         }).join('');
