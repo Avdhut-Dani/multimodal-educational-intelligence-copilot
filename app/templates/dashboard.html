@@ -358,7 +358,7 @@
               <td class="py-3 px-4 text-slate-400 text-[11px] font-mono">${time}</td>
               <td class="py-3 px-4 text-right">
                 <button onclick="inspectJobPoints('${job.job_id}', '${filename}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-[11px] border border-slate-700">
-                  <i class="fa-solid fa-eye mr-1 text-slate-400"></i> View Chunks
+                  <i class="fa-solid fa-file-lines mr-1 text-slate-400"></i> ${job.source_type === 'mp4' ? 'View Transcript' : 'View Chunks'}
                 </button>
               </td>
             </tr>
@@ -379,7 +379,7 @@
         const grid = document.getElementById('chunks-grid');
 
         if (!data.points || data.points.length === 0) {
-          grid.innerHTML = '<div class="col-span-2 py-8 text-center text-slate-500">No vector points found for this selection.</div>';
+          grid.innerHTML = '<div class="col-span-2 py-8 text-center text-slate-500">No vector points or transcripts found for this selection.</div>';
           return;
         }
 
@@ -393,8 +393,10 @@
             if (meta.has_tables) {
               badges += `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-table mr-1"></i>Markdown Table</span>`;
             }
-          } else if (source === 'mp4') {
             badges += `<span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20"><i class="fa-solid fa-clock mr-1"></i>${meta.start_timestamp}s - ${meta.end_timestamp}s</span>`;
+            if (meta.frame_reference) {
+              badges += `<span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-camera mr-1"></i>30s Keyframe</span>`;
+            }
           } else if (source === 'youtube') {
             badges += `<span class="px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20"><i class="fa-solid fa-clock mr-1"></i>${meta.start_timestamp}s (${meta.duration}s)</span>`;
           }
@@ -407,12 +409,9 @@
           let visualSlideHtml = '';
           if (meta.visual_slide_text) {
             visualSlideHtml = `
-              <div class="mt-3 p-2.5 rounded-lg bg-slate-900/90 border border-amber-500/20 text-[11px]">
-                <div class="font-semibold text-amber-400 flex items-center space-x-1 mb-1">
-                  <i class="fa-solid fa-image"></i>
-                  <span>Slide Keyframe OCR (Novelty 1):</span>
-                </div>
-                <p class="text-slate-300 font-mono">${meta.visual_slide_text}</p>
+              <div class="mt-2 text-[11px] text-amber-400/90 font-medium flex items-center space-x-1.5">
+                <i class="fa-solid fa-camera text-[10px]"></i>
+                <span>${escapeHtml(meta.visual_slide_text)}</span>
               </div>
             `;
           }
@@ -421,11 +420,19 @@
           if (meta.frame_reference) {
             const frameFilename = meta.frame_reference.split(/[\\\\/]/).pop();
             frameImgHtml = `
-              <div class="mt-2">
-                <img src="/frames/${frameFilename}" alt="Keyframe Slide" class="rounded-lg border border-slate-700 max-h-36 object-cover w-full" onerror="this.style.display='none'">
+              <div class="mt-2.5 rounded-lg overflow-hidden border border-slate-700/80 shadow-md">
+                <img src="/frames/${frameFilename}" alt="30s Keyframe Screenshot" class="max-h-48 object-cover w-full hover:scale-105 transition duration-300" onerror="this.style.display='none'">
               </div>
             `;
           }
+
+          const footerStatus = pt.vector ? `
+            <span>Vector: 384-d L2</span>
+            <span class="text-emerald-500">Ready for Team 4b</span>
+          ` : `
+            <span class="text-indigo-400"><i class="fa-solid fa-microphone mr-1"></i>Audio Transcript</span>
+            <span class="text-slate-400">Sentence Reconstructed</span>
+          `;
 
           return `
             <div class="bg-slate-900/60 border border-slate-800 hover:border-slate-700 rounded-xl p-4 flex flex-col justify-between transition">
@@ -445,8 +452,7 @@
                 ${visualSlideHtml}
               </div>
               <div class="mt-3 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                <span>Vector: 384-d L2</span>
-                <span class="text-emerald-500">Ready for Team 4b</span>
+                ${footerStatus}
               </div>
               ${pt.vector ? `
                 <details class="mt-2 text-[10px]">

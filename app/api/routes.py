@@ -69,7 +69,11 @@ async def ingest_pdf(file: UploadFile = File(...)):
     status_code=status.HTTP_200_OK,
     summary="Submit MP4 video for ingestion",
 )
-async def ingest_video(file: UploadFile = File(...)):
+async def ingest_video(
+    file: UploadFile = File(...),
+    subject: Optional[str] = Query(default=None, description="Optional subject prompt hint (e.g. 'Biology', 'Computer Science')"),
+    language: Optional[str] = Query(default=None, description="Optional ISO language code (e.g. 'hi' for Hindi/Hinglish lectures)"),
+):
     # Property 28: Content-type validation
     if file.content_type != "video/mp4":
         raise HTTPException(
@@ -80,9 +84,9 @@ async def ingest_video(file: UploadFile = File(...)):
     file_path = await save_uploaded_file(file, prefix="video")
     job_id = str(uuid.uuid4())
 
-    tracker.create_job(job_id=job_id, source_type="mp4", metadata={"filename": file.filename})
+    tracker.create_job(job_id=job_id, source_type="mp4", metadata={"filename": file.filename, "subject": subject})
     try:
-        process_video.delay(file_path=file_path, job_id=job_id)
+        process_video.delay(file_path=file_path, job_id=job_id, subject=subject, language=language)
     except Exception as e:
         logger.warning(f"Task execution for video job {job_id} encountered error: {e}")
 
@@ -157,6 +161,40 @@ async def get_catalog_points(
     limit: int = Query(default=50, ge=1, le=200, description="Max points to return"),
     with_vectors: bool = Query(default=True, description="Include raw 384-d vector embeddings in response"),
 ):
+    # 1. Check if job_id corresponds to a transcribed video job
+    if job_id:
+        transcript_file = os.path.join(settings.TRANSCRIPT_DIR, f"{job_id}.json")
+        if os.path.exists(transcript_file):
+            import json
+            try:
+                with open(transcript_file, "r", encoding="utf-8") as f:
+                    trans_data = json.load(f)
+                points_data = []
+                for idx, item in enumerate(trans_data[:limit]):
+                    points_data.append({
+                        "id": f"{job_id}-{idx+1}",
+                        "text": item.get("text", ""),
+                        "metadata": {
+                            "source_type": "mp4",
+                            "start_timestamp": round(float(item.get("start", 0.0)), 2),
+                            "end_timestamp": round(float(item.get("end", 0.0)), 2),
+                            "source": item.get("source", "audio"),
+                            "frame_reference": item.get("frame_reference"),
+                            "visual_slide_text": item.get("visual_text"),
+                        },
+                        "vector_dim": None,
+                        "vector": None,
+                    })
+                return {
+                    "collection": "transcripts_view",
+                    "total_points": len(trans_data),
+                    "vector_dim": None,
+                    "returned_count": len(points_data),
+                    "points": points_data,
+                }
+            except Exception as e:
+                logger.warning(f"Error reading transcript for job {job_id}: {e}")
+
     from qdrant_client import QdrantClient
     from qdrant_client.http import models as qmodels
 
@@ -215,6 +253,22 @@ async def get_catalog_points(
             "points": [],
             "error": str(e),
         }
+
+
+@router.get(
+    "/api/transcripts/{job_id}",
+    summary="Get raw timestamped sentence transcript JSON for a video job",
+)
+async def get_transcript(job_id: str):
+    import json
+    transcript_file = os.path.join(settings.TRANSCRIPT_DIR, f"{job_id}.json")
+    if not os.path.exists(transcript_file):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transcript for job '{job_id}' not found.",
+        )
+    with open(transcript_file, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 @router.get(

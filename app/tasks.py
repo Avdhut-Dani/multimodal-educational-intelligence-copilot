@@ -101,8 +101,10 @@ def process_pdf(self, file_path: str, job_id: str = None):
 
 
 @celery_app.task(bind=True, name="app.tasks.process_video")
-def process_video(self, file_path: str, job_id: str = None):
-    """Asynchronously processes an uploaded MP4 video file through the complete ingestion pipeline."""
+def process_video(self, file_path: str, job_id: str = None, subject: str = None, language: str = None):
+    """Processes an uploaded MP4 video using high-accuracy audio extraction and sentence-reconstructed Whisper transcription.
+    Screenshot keyframes and vector DB publishing are bypassed for video per configuration.
+    """
     task_id = job_id or self.request.id or "job-video"
     tracker = get_progress_tracker()
     settings = get_settings()
@@ -111,65 +113,48 @@ def process_video(self, file_path: str, job_id: str = None):
         # Stage 0: Queued
         tracker.update_progress(task_id, 0, JobStatus.QUEUED)
 
-        # Stage 1: Extraction (25%)
-        tracker.update_progress(task_id, 25, JobStatus.PROCESSING)
+        # Stage 1: Extraction & Transcription (30% -> 80%)
+        tracker.update_progress(task_id, 30, JobStatus.PROCESSING)
         video_processor = VideoProcessor(settings=settings)
-        segments, video_meta, keyframes = video_processor.process(file_path, job_id=task_id)
+        segments, video_meta, _ = video_processor.process(
+            file_path=file_path,
+            job_id=task_id,
+            subject=subject,
+            language=language,
+        )
 
-        # Stage 2: Chunking (50%)
-        tracker.update_progress(task_id, 50, JobStatus.PROCESSING)
-        chunker = Chunker(chunk_size=settings.CHUNK_SIZE, overlap=settings.CHUNK_OVERLAP)
+        tracker.update_progress(task_id, 80, JobStatus.PROCESSING)
 
-        filename = os.path.basename(file_path)
-        all_chunks_with_meta: List[Dict[str, Any]] = []
+        # Stage 2: Save transcript results & complete (skipping vector DB publish per configuration)
+        transcript_path = os.path.join(settings.TRANSCRIPT_DIR, f"{task_id}.json")
+        seg_dicts = [
+            {
+                "text": seg.text,
+                "start": seg.start_time,
+                "end": seg.end_time,
+                "status": seg.status,
+                "frame_reference": seg.frame_reference,
+                "visual_text": seg.visual_text,
+            }
+            for seg in segments
+        ]
 
-        for seg in segments:
-            if not seg.text.strip():
-                continue
-            seg_chunks = chunker.chunk(seg.text)
-            for c in seg_chunks:
-                all_chunks_with_meta.append({
-                    "text": c.text,
-                    "source_meta": {
-                        "start_time": seg.start_time,
-                        "end_time": seg.end_time,
-                        "filename": filename,
-                        "frame_reference": seg.frame_reference,
-                        "visual_text": seg.visual_text,
-                    }
-                })
+        tracker.update_progress(
+            task_id,
+            100,
+            JobStatus.COMPLETED,
+            chunk_count=len(segments),
+            extra_metadata={
+                "duration": video_meta.get("duration", 0.0),
+                "has_audio": video_meta.get("has_audio", True),
+                "title": video_meta.get("title", ""),
+                "keyframe_count": video_meta.get("keyframe_count", 0),
+                "transcript_path": transcript_path,
+                "segments": seg_dicts,
+            },
+        )
+        return {"job_id": task_id, "status": "completed", "chunk_count": len(segments), "transcript_path": transcript_path}
 
-        if not all_chunks_with_meta:
-            tracker.update_progress(task_id, 100, JobStatus.COMPLETED, chunk_count=0)
-            return {"job_id": task_id, "status": "completed", "chunk_count": 0}
-
-        # Stage 3: Embedding (75%)
-        tracker.update_progress(task_id, 75, JobStatus.PROCESSING)
-        embedder = EmbeddingGenerator(settings=settings)
-        embeddings = embedder.generate([item["text"] for item in all_chunks_with_meta])
-
-        # Stage 4: Metadata Enrichment & Publishing (100%)
-        enricher = MetadataEnricher(settings=settings)
-        publisher = VectorDBPublisher(settings=settings)
-
-        records_to_publish: List[Dict[str, Any]] = []
-        for i, item in enumerate(all_chunks_with_meta):
-            enriched = enricher.enrich(
-                chunk_text=item["text"],
-                source_type="mp4",
-                job_id=task_id,
-                source_meta=item["source_meta"],
-            )
-            enriched["embedding"] = embeddings[i]
-            records_to_publish.append(enriched)
-
-        total_published = publisher.publish(records_to_publish)
-        tracker.update_progress(task_id, 100, JobStatus.COMPLETED, chunk_count=total_published)
-        return {"job_id": task_id, "status": "completed", "chunk_count": total_published}
-
-    except PublishingError as pe:
-        tracker.update_progress(task_id, 75, JobStatus.PUBLISH_FAILED, error_details=str(pe))
-        raise
     except Exception as e:
         tracker.update_progress(task_id, 0, JobStatus.FAILED, error_details=str(e))
         raise

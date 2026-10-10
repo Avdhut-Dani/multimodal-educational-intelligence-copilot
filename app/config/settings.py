@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     # Storage Paths
     UPLOAD_DIR: str = "./storage/uploads"
     FRAME_DIR: str = "./storage/frames"
+    TRANSCRIPT_DIR: str = "./storage/transcripts"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -78,6 +79,7 @@ def get_settings() -> Settings:
     settings = Settings()
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.FRAME_DIR, exist_ok=True)
+    os.makedirs(settings.TRANSCRIPT_DIR, exist_ok=True)
     if settings.QDRANT_MODE == "embedded":
         os.makedirs(settings.QDRANT_PATH, exist_ok=True)
     return settings
